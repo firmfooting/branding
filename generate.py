@@ -649,6 +649,9 @@ def css_sphinx_rtd() -> str:
         f"a:hover {{ color: {TEAL[700]}; }}",
         ".rst-content h1, .rst-content h2, .rst-content h3, .rst-content h4,",
         ".wy-side-nav-search > a { font-family: Barlow, system-ui, sans-serif; font-weight: 600; }",
+        "/* The theme lets html_logo fill the sidebar's width; the mark reads at 64 px. */",
+        ".wy-side-nav-search > a img.logo,",
+        ".wy-side-nav-search .wy-dropdown > a img.logo { width: 64px; }",
         "",
     ])
 
