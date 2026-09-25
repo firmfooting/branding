@@ -1,4 +1,4 @@
-# Every file under assets/, repos/, social/ and web/, plus tokens.json and the
+# Every file under assets/, lockups/, repos/, social/ and web/, plus tokens.json and the
 # README palette table, is written by generate.py. This fails when one of them
 # no longer matches the script, so a hand edit, or a script change committed
 # without its output, cannot land.

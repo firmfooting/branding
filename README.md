@@ -28,6 +28,15 @@ The footing and ground line together are 12 × 6 and centred in the tile.
 
 **Lockup.** The wordmark stands on the same ground as the footing: its baseline is the bottom of the ground line. It is set in Barlow SemiBold at 13.5 units, tracked −1 %, five units from the tile.
 
+**Product lockup.** A tool's own lockup is the tile, its name in Barlow SemiBold at 9 units standing on the same ground line, and "firmfooting" above the name in Barlow Medium at 3.6 units, in the accent teal. The product name leads; the org endorses it.
+
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="lockups/formwork_dark.svg">
+    <img alt="formwork, by firmfooting" src="lockups/formwork.svg" height="48">
+  </picture>
+</p>
+
 **Clear space.** Keep 2 units (an eighth of the tile's height) clear around the tile, and the tile's own height clear around the lockup.
 
 **Minimum size.** The tile works down to 16 px. Below 120 px wide, use the tile on its own instead of the lockup.
@@ -113,6 +122,7 @@ Barlow is a low-contrast grotesk drawn from California's public signage: its hig
 | `assets/dark_logo.*` | Lockup with `chalk` text, for dark grounds |
 | `assets/logo_universal.*` | Lockup with `universal` text, for either |
 | `assets/mark.svg`, `mark_white.svg`, `mark_ink.svg` | The glyph alone, no tile, in one colour |
+| `lockups/<repo>.svg`, `<repo>_dark.svg` | Product lockup for each tool, for light and dark grounds; sized so the tile is 64 px tall |
 | `repos/dbml-sharepoint*.{svg,png}` | The mark and its two variants |
 | `social/<repo>.png` | 1280 × 640 social preview card for each repository; `social/github.png` is the org's |
 | `web/firmfooting.css` | The palette and type as CSS custom properties |
@@ -128,6 +138,15 @@ Barlow is a low-contrast grotesk drawn from California's public signage: its hig
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/firmfooting/branding/main/assets/dark_logo.svg">
   <img alt="firmfooting" src="https://raw.githubusercontent.com/firmfooting/branding/main/assets/logo.svg" width="240">
+</picture>
+```
+
+A tool's README opens with its product lockup instead, the same way:
+
+```html
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/firmfooting/branding/main/lockups/formwork_dark.svg">
+  <img alt="formwork, by firmfooting" src="https://raw.githubusercontent.com/firmfooting/branding/main/lockups/formwork.svg" height="56">
 </picture>
 ```
 
