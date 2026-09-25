@@ -372,6 +372,25 @@ def lockup_scene(text_colour: str) -> Scene:
                  tile.layers + [Layer(text_colour, text)], "firmfooting")
 
 
+
+# Product lockups: the tile, the product's name standing on the ground line in
+# Barlow SemiBold, and "firmfooting" above it, smaller, in the accent teal. The
+# org's own lockup is the wordmark alone; a product endorses it.
+PRODUCT_SIZE = 9.0
+ENDORSE_SIZE = 3.6
+ENDORSE_BASELINE = 3.4
+
+
+def product_lockup_scene(name: str, text_colour: str, accent: str) -> Scene:
+    x = GRID + LOCKUP_GAP * 0.8
+    text, advance = SEMIBOLD.set(name, PRODUCT_SIZE, x, GROUND.y + GROUND.h, LOCKUP_TRACKING)
+    endorse, endorse_w = MEDIUM.set(WORDMARK, ENDORSE_SIZE, x + PRODUCT_SIZE * 0.03,
+                                    ENDORSE_BASELINE, 0.02)
+    width = x + max(advance, endorse_w)
+    return Scene(width, GRID, tile_scene().layers + [Layer(accent, endorse), Layer(text_colour, text)],
+                 f"{name}, by firmfooting")
+
+
 # --- Social cards -------------------------------------------------------------
 # 1280 x 640, GitHub's size for a repository social preview. Drawn in pixels.
 
@@ -531,6 +550,15 @@ def build() -> dict[str, object]:
         out[f"assets/{name}.svg"] = render_svg(scene, 320)
         out[f"assets/{name}.png"] = render_png(scene, 320)
         out[f"assets/{name}@2x.png"] = render_png(scene, 640)
+
+    for slug, (name, _) in REPOS.items():
+        if slug in (".github", "branding"):
+            continue
+        for suffix, colour, accent in (("", role("ink"), role("brand")),
+                                       ("_dark", role("chalk"), role("brand-bright"))):
+            # Sized by height, so every product's tile is the same 64 px.
+            scene = product_lockup_scene(name, colour, accent)
+            out[f"lockups/{slug}{suffix}.svg"] = render_svg(scene, scene.w * 4)
 
     for slug in REPOS:
         out[f"social/{slug.lstrip('.')}.png"] = _flatten(render_png(social_scene(slug), 1280))
