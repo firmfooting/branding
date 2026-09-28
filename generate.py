@@ -685,20 +685,21 @@ def css_sphinx_rtd() -> str:
 
 
 def palette_markdown(rows) -> str:
-    lines = ["| Role | Value | Use |", "|---|---|---|"]
+    lines = ["| Role | Value | Use |", "| --- | --- | --- |"]
     for name in ROLES:
         scale, step = ROLES[name]
         lines.append(f"| `{name}` | `{role(name)}` ({scale} {step}) | {_ROLE_NOTES[name]} |")
-    lines += ["", "Every pairing the brand relies on is checked on each run; one that "
-              "falls below its minimum stops the run.", "",
-              "| Foreground | Background | Ratio | Minimum | Depends on it |", "|---|---|---|---|---|"]
+    lines += ["", "Every pairing the brand relies on is checked on each run; one that falls",
+              "below its minimum stops the run.", "",
+              "| Foreground | Background | Ratio | Minimum | Depends on it |",
+              "| --- | --- | --- | --- | --- |"]
     for fg, bg, ratio, minimum, use in rows:
         lines.append(f"| `{fg}` | `{bg}` | {ratio:.2f}:1 | {minimum:g}:1 | {use} |")
     lines += ["", "| Step | " + " | ".join(str(s) for s in TEAL) + " |",
-              "|---|" + "---|" * len(TEAL),
+              "| --- |" + " --- |" * len(TEAL),
               "| teal | " + " | ".join(f"`{v}`" for v in TEAL.values()) + " |", "",
               "| Step | " + " | ".join(str(s) for s in CONCRETE) + " |",
-              "|---|" + "---|" * len(CONCRETE),
+              "| --- |" + " --- |" * len(CONCRETE),
               "| concrete | " + " | ".join(f"`{v}`" for v in CONCRETE.values()) + " |"]
     return "\n".join(lines)
 

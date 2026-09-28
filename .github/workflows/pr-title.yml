@@ -1,0 +1,15 @@
+# The org's conventional PR title check; the check itself, and why it exists,
+# live in firmfooting/.github's pr-title.yml so every repository runs the same one.
+name: PR title
+
+on:
+  pull_request:
+    # `edited` matters: a title fixed after the fact must re-run the check.
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  conventional:
+    permissions: {}
+    uses: firmfooting/.github/.github/workflows/pr-title.yml@c81e460f1f485495c4421b2ee0c598b7477ae5a6 # ci/shared-gates

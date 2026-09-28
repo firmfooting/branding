@@ -1,0 +1,17 @@
+# The org's git-hook gate: every hook in .pre-commit-config.yaml over the whole
+# tree. The job itself lives in firmfooting/.github's prek.yml so every
+# repository runs the same one.
+name: prek
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  prek:
+    permissions:
+      contents: read
+    uses: firmfooting/.github/.github/workflows/prek.yml@c81e460f1f485495c4421b2ee0c598b7477ae5a6 # ci/shared-gates

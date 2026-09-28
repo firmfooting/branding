@@ -1,0 +1,16 @@
+# The org's workflow security audit; the check itself, and why it exists, live
+# in firmfooting/.github's zizmor.yml so every repository runs the same one.
+name: Workflow security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  zizmor:
+    permissions:
+      contents: read
+    uses: firmfooting/.github/.github/workflows/zizmor.yml@c81e460f1f485495c4421b2ee0c598b7477ae5a6 # ci/shared-gates
