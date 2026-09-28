@@ -13,4 +13,4 @@ jobs:
   zizmor:
     permissions:
       contents: read
-    uses: firmfooting/.github/.github/workflows/zizmor.yml@c81e460f1f485495c4421b2ee0c598b7477ae5a6 # ci/shared-gates
+    uses: firmfooting/.github/.github/workflows/zizmor.yml@abe24470fa14dea65f4cf6fca0f9e3cec6b0135a # v1.1.0
