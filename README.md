@@ -159,22 +159,26 @@ Fonts.
 ## Using it
 
 **README header.** Use `<picture>`, so readers on GitHub's dark theme get light
-text:
+text, inside an `<h1>`, so markdownlint's MD041 still finds a heading first:
 
 ```html
+<h1>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/firmfooting/branding/main/assets/dark_logo.svg">
   <img alt="firmfooting" src="https://raw.githubusercontent.com/firmfooting/branding/main/assets/logo.svg" width="240">
 </picture>
+</h1>
 ```
 
 A tool's README opens with its product lockup instead, the same way:
 
 ```html
+<h1>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/firmfooting/branding/main/lockups/formwork_dark.svg">
   <img alt="formwork, by firmfooting" src="https://raw.githubusercontent.com/firmfooting/branding/main/lockups/formwork.svg" height="56">
 </picture>
+</h1>
 ```
 
 **Social preview.** GitHub does not read this from the repository. Upload
