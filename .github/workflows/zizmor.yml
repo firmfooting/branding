@@ -13,4 +13,4 @@ jobs:
   zizmor:
     permissions:
       contents: read
-    uses: firmfooting/.github/.github/workflows/zizmor.yml@abe24470fa14dea65f4cf6fca0f9e3cec6b0135a # v1.1.0
+    uses: firmfooting/.github/.github/workflows/zizmor.yml@7b967509aeb2c27564751d4afb8ef989a28afbad # v1.2.0
