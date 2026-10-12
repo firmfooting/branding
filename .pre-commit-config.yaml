@@ -46,3 +46,26 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+  # The lint and type hooks call this project's pinned tools through `uv run`,
+  # so a hook cannot drift from the version the lock names.
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (lint)
+        entry: uv run ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run ruff format --check --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: pyrefly
+        name: pyrefly (strict)
+        entry: uv run pyrefly check
+        language: system
+        types: [python]
+        pass_filenames: false

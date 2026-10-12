@@ -29,18 +29,21 @@ import json
 import math
 import re
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, cast, override
 
 from fontTools.pens.basePen import AbstractPen, BasePen
 from fontTools.pens.recordingPen import DecomposingRecordingPen
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
-from PIL import Image, ImageChops, ImageDraw
+from PIL import IcoImagePlugin, Image, ImageChops, ImageDraw
 
 HERE = Path(__file__).resolve().parent
 Point = tuple[float, float]
+Ops = tuple[tuple[str, tuple[Point, ...]], ...]
 SS = 4  # supersample factor; masks are drawn at SS x size and box-filtered down
 
 
@@ -101,13 +104,13 @@ def role(name: str) -> str:
 
 
 def _hex_rgb(h: str) -> tuple[int, int, int]:
-    return tuple(int(h[i : i + 2], 16) for i in (1, 3, 5))
+    return int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16)
 
 
 def _luminance(h: str) -> float:
     def lin(c: int) -> float:
-        c = c / 255
-        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+        v = c / 255
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
 
     r, g, b = (lin(c) for c in _hex_rgb(h))
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
@@ -148,7 +151,8 @@ CONTRAST_RULES = [
 
 
 def check_contrast() -> list[Row]:
-    rows, failures = [], []
+    rows: list[Row] = []
+    failures: list[str] = []
     for fg, bg, minimum, use in CONTRAST_RULES:
         ratio = contrast(_colour(fg), _colour(bg))
         rows.append((fg, bg, ratio, minimum, use))
@@ -204,7 +208,8 @@ class RRect:
         x0, y0, x1, y1, r = self.x, self.y, self.x + self.w, self.y + self.h, self.r
         if not r:
             return [[(x0, y0), (x1, y0), (x1, y1), (x0, y1)]]
-        pts, steps = [], 24
+        pts: list[Point] = []
+        steps = 24
         for cx, cy, a0 in (
             (x1 - r, y0 + r, -90),
             (x1 - r, y1 - r, 0),
@@ -254,35 +259,36 @@ class _FlattenPen(BasePen):
         super().__init__(None)
         self.contours: list[list[tuple[float, float]]] = []
 
-    def _moveTo(self, pt: Point) -> None:  # noqa: N802 -- overrides fontTools BasePen
+    @override
+    def _moveTo(self, pt: Point) -> None:
         self.contours.append([pt])
 
-    def _lineTo(self, pt: Point) -> None:  # noqa: N802 -- overrides fontTools BasePen
+    @override
+    def _lineTo(self, pt: Point) -> None:
         self.contours[-1].append(pt)
 
-    def _curveToOne(self, p1: Point, p2: Point, p3: Point) -> None:  # noqa: N802 -- overrides fontTools BasePen
-        p0 = self._getCurrentPoint()
+    @override
+    def _curveToOne(self, pt1: Point, pt2: Point, pt3: Point) -> None:
+        p0: Point = self._getCurrentPoint()
         for i in range(1, self.STEPS + 1):
             t = i / self.STEPS
             u = 1 - t
-            self.contours[-1].append(
-                tuple(
-                    u**3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t**3 * d
-                    for a, b, c, d in zip(p0, p1, p2, p3, strict=True)
-                )
+            x, y = (
+                u**3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t**3 * d
+                for a, b, c, d in zip(p0, pt1, pt2, pt3, strict=True)
             )
+            self.contours[-1].append((x, y))
 
-    def _qCurveToOne(self, p1: Point, p2: Point) -> None:  # noqa: N802 -- overrides fontTools BasePen
-        p0 = self._getCurrentPoint()
+    @override
+    def _qCurveToOne(self, pt1: Point, pt2: Point) -> None:
+        p0: Point = self._getCurrentPoint()
         for i in range(1, self.STEPS + 1):
             t = i / self.STEPS
             u = 1 - t
-            self.contours[-1].append(
-                tuple(
-                    u * u * a + 2 * u * t * b + t * t * c
-                    for a, b, c in zip(p0, p1, p2, strict=True)
-                )
+            x, y = (
+                u * u * a + 2 * u * t * b + t * t * c for a, b, c in zip(p0, pt1, pt2, strict=True)
             )
+            self.contours[-1].append((x, y))
 
 
 @dataclass(frozen=True)
@@ -290,7 +296,7 @@ class Outline:
     """A glyph outline, filled even-odd. `ops` is a fontTools recording in font
     units; `m` is the affine transform (a, b, c, d, e, f) into scene units."""
 
-    ops: tuple
+    ops: Ops
     m: tuple[float, float, float, float, float, float]
 
     def _replay(self, pen: AbstractPen) -> None:
@@ -314,13 +320,14 @@ class Outline:
 
 
 type Shape = Poly | RRect | Circle | Outline
+type Output = str | list[tuple[int, Image.Image]] | Image.Image
 
 
 @dataclass
 class Layer:
     colour: str
-    shapes: list = field(default_factory=list)
-    clip: list | None = None  # raster only: keep the layer inside these shapes
+    shapes: Sequence[Shape] = field(default_factory=list)
+    clip: Sequence[Shape] | None = None  # raster only: keep the layer inside these shapes
 
 
 @dataclass
@@ -331,7 +338,7 @@ class Scene:
     title: str = ""
 
 
-def _moved(shapes: list[Shape], s: float, dx: float, dy: float) -> list[Shape]:
+def _moved(shapes: Sequence[Shape], s: float, dx: float, dy: float) -> list[Shape]:
     return [sh.moved(s, dx, dy) for sh in shapes]
 
 
@@ -341,16 +348,21 @@ def _moved(shapes: list[Shape], s: float, dx: float, dy: float) -> list[Shape]:
 class Font:
     def __init__(self, filename: str) -> None:
         self.tt = TTFont(HERE / "fonts" / filename)
-        self.upm = self.tt["head"].unitsPerEm
+        # fontTools types its tables loosely; unitsPerEm is a required head field.
+        self.upm: int = cast("Any", self.tt["head"]).unitsPerEm
         self.glyphs = self.tt.getGlyphSet()
-        self.cmap = self.tt.getBestCmap()
-        self._ops: dict[str, tuple] = {}
+        cmap = self.tt.getBestCmap()
+        if cmap is None:
+            raise ValueError(f"{filename} has no usable cmap")
+        self.cmap = cmap
+        self._ops: dict[str, Ops] = {}
 
-    def _record(self, name: str) -> tuple:
+    def _record(self, name: str) -> Ops:
         if name not in self._ops:
             pen = DecomposingRecordingPen(self.glyphs)
             self.glyphs[name].draw(pen)
-            self._ops[name] = tuple((op, tuple(args)) for op, args in pen.value)
+            recorded: list[tuple[str, tuple[Point, ...]]] = pen.value
+            self._ops[name] = tuple((op, tuple(args)) for op, args in recorded)
         return self._ops[name]
 
     def set(
@@ -360,7 +372,8 @@ class Font:
         advance. Tracking is in em. No shaping or kerning: every string set
         with this is short, lowercase or plain, and checked by eye."""
         k = size / self.upm
-        out, pen_x = [], x
+        out: list[Outline] = []
+        pen_x = x
         for ch in text:
             name = self.cmap[ord(ch)]
             ops = self._record(name)
@@ -387,8 +400,8 @@ BEACON = Circle(8, 2.75, 1.1)  # the probe: dbml-sharepoint-probes
 COVER = RRect(6, 3, 4, 1, 0.5)  # the lid: dbml-sharepoint-family
 
 
-def mark_shapes(*, beacon: bool = False, cover: bool = False) -> list:
-    shapes = [FOOTING, GROUND]
+def mark_shapes(*, beacon: bool = False, cover: bool = False) -> list[Shape]:
+    shapes: list[Shape] = [FOOTING, GROUND]
     if beacon:
         shapes.append(BEACON)
     if cover:
@@ -482,7 +495,8 @@ REPOS = {
 def _hatch(x0: float, y0: float, x1: float, y1: float, pitch: float, weight: float) -> list[Shape]:
     """45-degree earth hatching, the section-drawing convention for ground."""
     h = y1 - y0
-    lines, x = [], x0 - h
+    lines: list[Shape] = []
+    x = x0 - h
     while x < x1:
         lines.append(Poly(((x, y1), (x + weight, y1), (x + weight + h, y0), (x + h, y0))))
         x += pitch
@@ -528,7 +542,7 @@ def social_scene(slug: str) -> Scene:
     size = 116 if len(name) <= 12 else 96
     text, _ = SEMIBOLD.set(name, size, left - size * 0.04, 318, -0.015)
     layers.append(Layer(role("chalk"), text))
-    lines = []
+    lines: list[Shape] = []
     for i, line in enumerate(tagline):
         glyphs, _ = MEDIUM.set(line, 40, left, 388 + i * 50)
         lines += glyphs
@@ -561,7 +575,7 @@ def render_svg(scene: Scene, width: float | None = None) -> str:
     return "\n".join(out) + "\n"
 
 
-def _mask(shapes: list[Shape], size: tuple[int, int], k: float) -> Image.Image:
+def _mask(shapes: Sequence[Shape], size: tuple[int, int], k: float) -> Image.Image:
     mask = Image.new("1", size, 0)
     draw = ImageDraw.Draw(mask)
     for shape in shapes:
@@ -595,7 +609,7 @@ def render_png(scene: Scene, width: int, height: int | None = None) -> Image.Ima
         mask = _mask(layer.shapes, big, k)
         if layer.clip:
             mask = ImageChops.logical_and(mask, _mask(layer.clip, big, k))
-        alpha = mask.convert("L").resize((width, height), Image.BOX)
+        alpha = mask.convert("L").resize((width, height), Image.Resampling.BOX)
         paint = Image.new("RGBA", (width, height), (*_hex_rgb(layer.colour), 255))
         paint.putalpha(alpha)
         img.alpha_composite(paint)
@@ -610,9 +624,9 @@ def _flatten(img: Image.Image) -> Image.Image:
 # --- Outputs ------------------------------------------------------------------
 
 
-def build() -> dict[str, object]:
+def build() -> dict[str, Output]:
     """Path -> PIL image, list of (size, image) for an .ico, or text."""
-    out: dict[str, object] = {}
+    out: dict[str, Output] = {}
     icon = tile_scene()
     # The org avatar is full bleed: GitHub rounds avatars itself, and a tile with
     # its own rounded, transparent corners shows the page through them.
@@ -659,7 +673,12 @@ def build() -> dict[str, object]:
     for slug in REPOS:
         out[f"social/{slug.lstrip('.')}.png"] = _flatten(render_png(social_scene(slug), 1280))
 
-    for suffix, variant in (("", {}), ("-probes", {"beacon": True}), ("-family", {"cover": True})):
+    variants: tuple[tuple[str, dict[str, bool]], ...] = (
+        ("", {}),
+        ("-probes", {"beacon": True}),
+        ("-family", {"cover": True}),
+    )
+    for suffix, variant in variants:
         out[f"repos/dbml-sharepoint{suffix}.png"] = render_png(tile_scene(**variant), 256)
         out[f"repos/dbml-sharepoint{suffix}.svg"] = render_svg(tile_scene(**variant), 256)
 
@@ -896,6 +915,8 @@ def _same_pixels(path: Path, img: Image.Image) -> bool:
 def _same_ico(path: Path, frames: list[tuple[int, Image.Image]]) -> bool:
     try:
         with Image.open(path) as ico:
+            if not isinstance(ico, IcoImagePlugin.IcoImageFile):
+                return False
             for size, img in frames:
                 frame = ico.ico.getimage((size, size)).convert("RGBA")
                 if frame.tobytes() != img.tobytes():
@@ -918,7 +939,7 @@ def main() -> int:
     outputs = build()
     outputs["README.md"] = readme_text(rows)
 
-    stale = []
+    stale: list[str] = []
     for rel, value in outputs.items():
         path = HERE / rel
         if isinstance(value, str):
