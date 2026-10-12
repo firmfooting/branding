@@ -17,3 +17,52 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.ruff]
+line-length = 100
+required-version = ">=0.17"
+target-version = "py315"
+
+[tool.ruff.lint]
+select = [
+  "A", "ANN", "B", "BLE", "C4", "C901", "DTZ", "E",
+  "ERA", "F", "FURB", "G", "I", "ICN", "INP", "ISC",
+  "LOG", "N", "PERF", "PGH", "PIE", "PLC", "PLE", "PLR",
+  "PLW", "PT", "PTH", "PYI", "RET", "RUF", "S", "SIM",
+  "SLF", "T20", "TID251", "TID252", "TRY", "UP", "W",
+]
+# The org-wide ignores; this repository adds none of its own.
+ignore = [
+  "ANN401", "ISC001", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917",
+  "PLR2004", "PT018", "TRY003", "TRY004",
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+# A CLI that reports what it wrote and what is stale on stdout.
+"generate.py" = ["T20"]
+
+[tool.pyrefly]
+python-version = "3.15"
+project-includes = ["generate.py"]
+preset = "strict"
+check-unannotated-defs = true
+infer-return-types = "never"
+type-ignore-unknown-tag-behavior = "no-effect"
+
+[tool.pyrefly.errors]
+no-any-return = "error"
+implicit-any-parameter = "error"
+redundant-cast = "error"
+unannotated-return = "error"
+implicit-any = "error"
+implicit-reexport = "error"
+unused-ignore = "error"
+unused-type-ignore = "error"
+incompatible-comparison = "error"
+unnecessary-type-conversion = "error"
+redundant-condition = "error"
+unknown-argument-type = "error"
+unknown-variable-type = "error"

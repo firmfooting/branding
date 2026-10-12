@@ -20,6 +20,7 @@ Usage:
 
 Needs Pillow and fontTools (see pyproject.toml).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -47,29 +48,46 @@ SS = 4  # supersample factor; masks are drawn at SS x size and box-filtered down
 # teal, named for what a footing is poured from.
 
 TEAL = {
-    50: "#EEF6F5", 100: "#D5EAE7", 200: "#A9D3CD", 300: "#74B8AE",
-    400: "#4E9C92", 500: "#3A847C", 600: "#2A6B64", 700: "#22564F",
-    800: "#1B433E", 900: "#13302C", 950: "#0B1E1B",
+    50: "#EEF6F5",
+    100: "#D5EAE7",
+    200: "#A9D3CD",
+    300: "#74B8AE",
+    400: "#4E9C92",
+    500: "#3A847C",
+    600: "#2A6B64",
+    700: "#22564F",
+    800: "#1B433E",
+    900: "#13302C",
+    950: "#0B1E1B",
 }
 CONCRETE = {
-    0: "#FFFFFF", 50: "#F6F8F7", 100: "#EAEEED", 200: "#D6DDDB", 300: "#B7C1BE",
-    400: "#8E9A97", 500: "#6B7774", 600: "#515C59", 700: "#3B4442",
-    800: "#262D2C", 900: "#182020", 950: "#0E1414",
+    0: "#FFFFFF",
+    50: "#F6F8F7",
+    100: "#EAEEED",
+    200: "#D6DDDB",
+    300: "#B7C1BE",
+    400: "#8E9A97",
+    500: "#6B7774",
+    600: "#515C59",
+    700: "#3B4442",
+    800: "#262D2C",
+    900: "#182020",
+    950: "#0E1414",
 }
 SCALES = {"teal": TEAL, "concrete": CONCRETE}
 
 # Role -> (scale, step). Use roles in assets and docs; the steps are the ramp.
 ROLES = {
-    "brand": ("teal", 600),         # the tile; links and buttons on light grounds
+    "brand": ("teal", 600),  # the tile; links and buttons on light grounds
     "brand-strong": ("teal", 700),  # hover and pressed on light grounds
     "brand-bright": ("teal", 300),  # links and accents on dark grounds
-    "universal": ("teal", 500),     # wordmark text that must hold on any ground
-    "glyph": ("concrete", 0),       # the mark, on the tile
-    "ink": ("concrete", 900),       # text on light grounds
-    "chalk": ("concrete", 50),      # text on dark grounds
-    "paper": ("concrete", 50),      # light ground
-    "night": ("teal", 950),         # dark ground (social cards)
-    "rule": ("concrete", 200),      # hairlines on light grounds
+    "universal": ("teal", 500),  # wordmark text that must hold on any ground
+    "glyph": ("concrete", 0),  # the mark, on the tile
+    "ink": ("concrete", 900),  # text on light grounds
+    "chalk": ("concrete", 50),  # text on dark grounds
+    "paper": ("concrete", 50),  # light ground
+    "night": ("teal", 950),  # dark ground (social cards)
+    "rule": ("concrete", 200),  # hairlines on light grounds
 }
 
 # Grounds the assets are actually shown on, as well as the brand's own.
@@ -82,13 +100,14 @@ def role(name: str) -> str:
 
 
 def _hex_rgb(h: str) -> tuple[int, int, int]:
-    return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+    return tuple(int(h[i : i + 2], 16) for i in (1, 3, 5))
 
 
 def _luminance(h: str) -> float:
     def lin(c: int) -> float:
         c = c / 255
         return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
     r, g, b = (lin(c) for c in _hex_rgb(h))
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
@@ -140,6 +159,7 @@ def check_contrast() -> list[tuple[str, str, float, float, str]]:
 # polygons for the rasteriser. Coordinates are scene units; scenes are scaled to
 # pixels at render time.
 
+
 def _n(v: float) -> str:
     """Compact, stable number formatting for SVG."""
     s = f"{v:.3f}".rstrip("0").rstrip(".")
@@ -170,16 +190,22 @@ class RRect:
 
     def svg(self) -> str:
         rx = f' rx="{_n(self.r)}"' if self.r else ""
-        return (f'<rect x="{_n(self.x)}" y="{_n(self.y)}" width="{_n(self.w)}" '
-                f'height="{_n(self.h)}"{rx}/>')
+        return (
+            f'<rect x="{_n(self.x)}" y="{_n(self.y)}" width="{_n(self.w)}" '
+            f'height="{_n(self.h)}"{rx}/>'
+        )
 
     def contours(self) -> list[list[tuple[float, float]]]:
         x0, y0, x1, y1, r = self.x, self.y, self.x + self.w, self.y + self.h, self.r
         if not r:
             return [[(x0, y0), (x1, y0), (x1, y1), (x0, y1)]]
         pts, steps = [], 24
-        for cx, cy, a0 in ((x1 - r, y0 + r, -90), (x1 - r, y1 - r, 0),
-                           (x0 + r, y1 - r, 90), (x0 + r, y0 + r, 180)):
+        for cx, cy, a0 in (
+            (x1 - r, y0 + r, -90),
+            (x1 - r, y1 - r, 0),
+            (x0 + r, y1 - r, 90),
+            (x0 + r, y0 + r, 180),
+        ):
             for i in range(steps + 1):
                 a = math.radians(a0 + 90 * i / steps)
                 pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
@@ -200,8 +226,15 @@ class Circle:
 
     def contours(self) -> list[list[tuple[float, float]]]:
         steps = 96
-        return [[(self.cx + self.r * math.cos(2 * math.pi * i / steps),
-                  self.cy + self.r * math.sin(2 * math.pi * i / steps)) for i in range(steps)]]
+        return [
+            [
+                (
+                    self.cx + self.r * math.cos(2 * math.pi * i / steps),
+                    self.cy + self.r * math.sin(2 * math.pi * i / steps),
+                )
+                for i in range(steps)
+            ]
+        ]
 
     def moved(self, s: float, dx: float, dy: float) -> "Circle":
         return Circle(self.cx * s + dx, self.cy * s + dy, self.r * s)
@@ -227,23 +260,28 @@ class _FlattenPen(BasePen):
         for i in range(1, self.STEPS + 1):
             t = i / self.STEPS
             u = 1 - t
-            self.contours[-1].append(tuple(
-                u ** 3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t ** 3 * d
-                for a, b, c, d in zip(p0, p1, p2, p3)))
+            self.contours[-1].append(
+                tuple(
+                    u**3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t**3 * d
+                    for a, b, c, d in zip(p0, p1, p2, p3)
+                )
+            )
 
     def _qCurveToOne(self, p1, p2):
         p0 = self._getCurrentPoint()
         for i in range(1, self.STEPS + 1):
             t = i / self.STEPS
             u = 1 - t
-            self.contours[-1].append(tuple(
-                u * u * a + 2 * u * t * b + t * t * c for a, b, c in zip(p0, p1, p2)))
+            self.contours[-1].append(
+                tuple(u * u * a + 2 * u * t * b + t * t * c for a, b, c in zip(p0, p1, p2))
+            )
 
 
 @dataclass(frozen=True)
 class Outline:
     """A glyph outline, filled even-odd. `ops` is a fontTools recording in font
     units; `m` is the affine transform (a, b, c, d, e, f) into scene units."""
+
     ops: tuple
     m: tuple[float, float, float, float, float, float]
 
@@ -288,6 +326,7 @@ def _moved(shapes, s, dx, dy):
 
 # --- Type ---------------------------------------------------------------------
 
+
 class Font:
     def __init__(self, filename: str):
         self.tt = TTFont(os.path.join(HERE, "fonts", filename))
@@ -303,8 +342,9 @@ class Font:
             self._ops[name] = tuple((op, tuple(args)) for op, args in pen.value)
         return self._ops[name]
 
-    def set(self, text: str, size: float, x: float, baseline: float,
-            tracking: float = 0.0) -> tuple[list[Outline], float]:
+    def set(
+        self, text: str, size: float, x: float, baseline: float, tracking: float = 0.0
+    ) -> tuple[list[Outline], float]:
         """Outlines for `text` at `size`, starting at x on `baseline`, and the
         advance. Tracking is in em. No shaping or kerning: every string set
         with this is short, lowercase or plain, and checked by eye."""
@@ -330,10 +370,10 @@ WORDMARK = "firmfooting"
 
 GRID = 16
 TILE_RADIUS = 3.5
-FOOTING = Poly(((6, 5), (10, 5), (13, 9), (3, 9)))   # 4 wide on top, 10 at the base
-GROUND = RRect(2, 10, 12, 1, 0.5)                      # runs a unit past the base each side
-BEACON = Circle(8, 2.75, 1.1)                          # the probe: dbml-sharepoint-probes
-COVER = RRect(6, 3, 4, 1, 0.5)                         # the lid: dbml-sharepoint-family
+FOOTING = Poly(((6, 5), (10, 5), (13, 9), (3, 9)))  # 4 wide on top, 10 at the base
+GROUND = RRect(2, 10, 12, 1, 0.5)  # runs a unit past the base each side
+BEACON = Circle(8, 2.75, 1.1)  # the probe: dbml-sharepoint-probes
+COVER = RRect(6, 3, 4, 1, 0.5)  # the lid: dbml-sharepoint-family
 
 
 def mark_shapes(*, beacon: bool = False, cover: bool = False) -> list:
@@ -346,15 +386,26 @@ def mark_shapes(*, beacon: bool = False, cover: bool = False) -> list:
 
 
 def tile_scene(*, radius: float = TILE_RADIUS, **variant) -> Scene:
-    return Scene(GRID, GRID, [Layer(role("brand"), [RRect(0, 0, GRID, GRID, radius)]),
-                              Layer(role("glyph"), mark_shapes(**variant))], "firmfooting")
+    return Scene(
+        GRID,
+        GRID,
+        [
+            Layer(role("brand"), [RRect(0, 0, GRID, GRID, radius)]),
+            Layer(role("glyph"), mark_shapes(**variant)),
+        ],
+        "firmfooting",
+    )
 
 
 def mark_scene(colour: str) -> Scene:
     """The glyph alone, cropped to the ground line's width, for one-colour use."""
     x0, y0 = GROUND.x, FOOTING.points[0][1]
-    return Scene(GROUND.w, GROUND.y + GROUND.h - y0,
-                 [Layer(colour, _moved(mark_shapes(), 1, -x0, -y0))], "firmfooting")
+    return Scene(
+        GROUND.w,
+        GROUND.y + GROUND.h - y0,
+        [Layer(colour, _moved(mark_shapes(), 1, -x0, -y0))],
+        "firmfooting",
+    )
 
 
 # Lockup: the text stands on the same line as the footing. Its baseline is the
@@ -365,12 +416,13 @@ LOCKUP_TRACKING = -0.01
 
 
 def lockup_scene(text_colour: str) -> Scene:
-    text, advance = SEMIBOLD.set(WORDMARK, LOCKUP_SIZE, GRID + LOCKUP_GAP,
-                                 GROUND.y + GROUND.h, LOCKUP_TRACKING)
+    text, advance = SEMIBOLD.set(
+        WORDMARK, LOCKUP_SIZE, GRID + LOCKUP_GAP, GROUND.y + GROUND.h, LOCKUP_TRACKING
+    )
     tile = tile_scene()
-    return Scene(GRID + LOCKUP_GAP + advance, GRID,
-                 tile.layers + [Layer(text_colour, text)], "firmfooting")
-
+    return Scene(
+        GRID + LOCKUP_GAP + advance, GRID, tile.layers + [Layer(text_colour, text)], "firmfooting"
+    )
 
 
 # Product lockups: the tile, the product's name standing on the ground line in
@@ -384,11 +436,16 @@ ENDORSE_BASELINE = 3.4
 def product_lockup_scene(name: str, text_colour: str, accent: str) -> Scene:
     x = GRID + LOCKUP_GAP * 0.8
     text, advance = SEMIBOLD.set(name, PRODUCT_SIZE, x, GROUND.y + GROUND.h, LOCKUP_TRACKING)
-    endorse, endorse_w = MEDIUM.set(WORDMARK, ENDORSE_SIZE, x + PRODUCT_SIZE * 0.03,
-                                    ENDORSE_BASELINE, 0.02)
+    endorse, endorse_w = MEDIUM.set(
+        WORDMARK, ENDORSE_SIZE, x + PRODUCT_SIZE * 0.03, ENDORSE_BASELINE, 0.02
+    )
     width = x + max(advance, endorse_w)
-    return Scene(width, GRID, tile_scene().layers + [Layer(accent, endorse), Layer(text_colour, text)],
-                 f"{name}, by firmfooting")
+    return Scene(
+        width,
+        GRID,
+        tile_scene().layers + [Layer(accent, endorse), Layer(text_colour, text)],
+        f"{name}, by firmfooting",
+    )
 
 
 # --- Social cards -------------------------------------------------------------
@@ -397,10 +454,16 @@ def product_lockup_scene(name: str, text_colour: str, accent: str) -> Scene:
 REPOS = {
     # slug: (display name, tagline lines)
     ".github": ("firmfooting", ["Safe, plain tooling for", "M365 and SharePoint operators."]),
-    "dbml-sharepoint": ("dbml-sharepoint", ["A DBML schema in, fail-closed", "SharePoint lists out."]),
+    "dbml-sharepoint": (
+        "dbml-sharepoint",
+        ["A DBML schema in, fail-closed", "SharePoint lists out."],
+    ),
     "formwork": ("formwork", ["SharePoint pages as YAML,", "poured from the browser console."]),
     "vsdxkit": ("vsdxkit", ["Create, edit and analyse Visio", ".vsdx files with Python."]),
-    "renovate-config": ("renovate-config", ["One dependency policy,", "extended by every repository."]),
+    "renovate-config": (
+        "renovate-config",
+        ["One dependency policy,", "extended by every repository."],
+    ),
     "branding": ("branding", ["The mark, colour and type", "of firmfooting."]),
 }
 
@@ -430,8 +493,13 @@ def social_scene(slug: str) -> Scene:
     u = 26
     ground_top = 528
     ground = RRect(0, ground_top, W, u)
-    layers.append(Layer(TEAL[800], _hatch(0, ground_top + u, W, H, 22, 4),
-                        clip=[RRect(0, ground_top + u, W, H - ground_top - u)]))
+    layers.append(
+        Layer(
+            TEAL[800],
+            _hatch(0, ground_top + u, W, H, 22, 4),
+            clip=[RRect(0, ground_top + u, W, H - ground_top - u)],
+        )
+    )
     footing_x = W - left - 10 * u - 3 * u
     footing = FOOTING.moved(u, footing_x - 3 * u, ground_top - 10 * u)
     layers.append(Layer(role("universal"), [ground]))
@@ -461,15 +529,20 @@ def social_scene(slug: str) -> Scene:
 
 # --- Rendering ----------------------------------------------------------------
 
+
 def render_svg(scene: Scene, width: float | None = None) -> str:
     w = width or scene.w
     h = w * scene.h / scene.w
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {_n(scene.w)} {_n(scene.h)}" '
-           f'width="{_n(w)}" height="{_n(h)}" role="img" aria-label="{scene.title}">',
-           f"<title>{scene.title}</title>"]
+    out = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {_n(scene.w)} {_n(scene.h)}" '
+        f'width="{_n(w)}" height="{_n(h)}" role="img" aria-label="{scene.title}">',
+        f"<title>{scene.title}</title>",
+    ]
     for layer in scene.layers:
         rule = ' fill-rule="evenodd"' if any(isinstance(s, Outline) for s in layer.shapes) else ""
-        out.append(f'<g fill="{layer.colour}"{rule}>' + "".join(s.svg() for s in layer.shapes) + "</g>")
+        out.append(
+            f'<g fill="{layer.colour}"{rule}>' + "".join(s.svg() for s in layer.shapes) + "</g>"
+        )
     out.append("</svg>")
     return "\n".join(out) + "\n"
 
@@ -522,6 +595,7 @@ def _flatten(img: Image.Image) -> Image.Image:
 
 # --- Outputs ------------------------------------------------------------------
 
+
 def build() -> dict[str, object]:
     """Path -> PIL image, list of (size, image) for an .ico, or text."""
     out: dict[str, object] = {}
@@ -540,12 +614,18 @@ def build() -> dict[str, object]:
     out["assets/avatar.png"] = _flatten(render_png(avatar, 512))
     out["assets/avatar@2x.png"] = _flatten(render_png(avatar, 1024))
 
-    for colour, name in ((role("brand"), "mark"), (role("glyph"), "mark_white"),
-                         (role("ink"), "mark_ink")):
+    for colour, name in (
+        (role("brand"), "mark"),
+        (role("glyph"), "mark_white"),
+        (role("ink"), "mark_ink"),
+    ):
         out[f"assets/{name}.svg"] = render_svg(mark_scene(colour), 192)
 
-    for colour, name in ((role("ink"), "logo"), (role("chalk"), "dark_logo"),
-                         (role("universal"), "logo_universal")):
+    for colour, name in (
+        (role("ink"), "logo"),
+        (role("chalk"), "dark_logo"),
+        (role("universal"), "logo_universal"),
+    ):
         scene = lockup_scene(colour)
         out[f"assets/{name}.svg"] = render_svg(scene, 320)
         out[f"assets/{name}.png"] = render_png(scene, 320)
@@ -554,8 +634,10 @@ def build() -> dict[str, object]:
     for slug, (name, _) in REPOS.items():
         if slug in (".github", "branding"):
             continue
-        for suffix, colour, accent in (("", role("ink"), role("brand")),
-                                       ("_dark", role("chalk"), role("brand-bright"))):
+        for suffix, colour, accent in (
+            ("", role("ink"), role("brand")),
+            ("_dark", role("chalk"), role("brand-bright")),
+        ):
             # Sized by height, so every product's tile is the same 64 px.
             scene = product_lockup_scene(name, colour, accent)
             out[f"lockups/{slug}{suffix}.svg"] = render_svg(scene, scene.w * 4)
@@ -576,26 +658,47 @@ def build() -> dict[str, object]:
 
 def tokens_json() -> str:
     """Design tokens in the W3C Design Tokens Community Group format."""
+
     def colour(v):
         return {"$type": "color", "$value": v}
+
     tokens = {
-        "color": {name: {str(step): colour(v) for step, v in scale.items()}
-                  for name, scale in SCALES.items()},
-        "role": {name: {**colour("{color.%s.%d}" % ROLES[name]),
-                        "$description": _ROLE_NOTES[name]} for name in ROLES},
-        "font": {
-            "display": {"$type": "fontFamily", "$value": ["Barlow", "system-ui", "sans-serif"],
-                        "$description": "Wordmark, headings and names. SemiBold (600)."},
-            "body": {"$type": "fontFamily",
-                     "$value": ["system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
-                     "$description": "Running text: the reader's own UI face."},
-            "mono": {"$type": "fontFamily",
-                     "$value": ["ui-monospace", "Cascadia Code", "SFMono-Regular", "Consolas", "monospace"],
-                     "$description": "Code, paste-ins and file names."},
+        "color": {
+            name: {str(step): colour(v) for step, v in scale.items()}
+            for name, scale in SCALES.items()
         },
-        "mark": {"$description": "Footing: trapezoid (4 wide on top, 10 at the base, 4 tall) "
-                                 "on a ground line 12 wide and 1 tall, one unit below, on a "
-                                 "16-unit grid. Tile corner radius 3.5."},
+        "role": {
+            name: {**colour("{color.%s.%d}" % ROLES[name]), "$description": _ROLE_NOTES[name]}
+            for name in ROLES
+        },
+        "font": {
+            "display": {
+                "$type": "fontFamily",
+                "$value": ["Barlow", "system-ui", "sans-serif"],
+                "$description": "Wordmark, headings and names. SemiBold (600).",
+            },
+            "body": {
+                "$type": "fontFamily",
+                "$value": ["system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
+                "$description": "Running text: the reader's own UI face.",
+            },
+            "mono": {
+                "$type": "fontFamily",
+                "$value": [
+                    "ui-monospace",
+                    "Cascadia Code",
+                    "SFMono-Regular",
+                    "Consolas",
+                    "monospace",
+                ],
+                "$description": "Code, paste-ins and file names.",
+            },
+        },
+        "mark": {
+            "$description": "Footing: trapezoid (4 wide on top, 10 at the base, 4 tall) "
+            "on a ground line 12 wide and 1 tall, one unit below, on a "
+            "16-unit grid. Tile corner radius 3.5."
+        },
     }
     return json.dumps(tokens, indent=2) + "\n"
 
@@ -613,10 +716,12 @@ _ROLE_NOTES = {
     "rule": "Hairlines and borders on light grounds.",
 }
 
-_CSS_HEAD = ("/* Generated by firmfooting/branding generate.py. Do not edit; "
-             "change the palette there. */\n")
-_FONT_IMPORT = ("@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@500;600"
-                "&display=swap');\n")
+_CSS_HEAD = (
+    "/* Generated by firmfooting/branding generate.py. Do not edit; change the palette there. */\n"
+)
+_FONT_IMPORT = (
+    "@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@500;600&display=swap');\n"
+)
 
 
 def css_tokens() -> str:
@@ -624,64 +729,93 @@ def css_tokens() -> str:
     for name, scale in SCALES.items():
         lines += [f"  --ff-{name}-{step}: {v};" for step, v in scale.items()]
     lines += [f"  --ff-{name}: var(--ff-{ROLES[name][0]}-{ROLES[name][1]});" for name in ROLES]
-    lines += ["  --ff-font-display: Barlow, system-ui, sans-serif;",
-              "  --ff-font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;",
-              "  --ff-font-mono: ui-monospace, 'Cascadia Code', SFMono-Regular, Consolas, monospace;",
-              "}", ""]
+    lines += [
+        "  --ff-font-display: Barlow, system-ui, sans-serif;",
+        "  --ff-font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;",
+        "  --ff-font-mono: ui-monospace, 'Cascadia Code', SFMono-Regular, Consolas, monospace;",
+        "}",
+        "",
+    ]
     return "\n".join(lines)
 
 
 def css_docusaurus() -> str:
     """Infima variables for a Docusaurus classic theme (src/css/custom.css)."""
-    light = {"": 600, "-dark": 700, "-darker": 700, "-darkest": 800,
-             "-light": 500, "-lighter": 400, "-lightest": 300}
-    dark = {"": 300, "-dark": 400, "-darker": 500, "-darkest": 600,
-            "-light": 200, "-lighter": 100, "-lightest": 50}
+    light = {
+        "": 600,
+        "-dark": 700,
+        "-darker": 700,
+        "-darkest": 800,
+        "-light": 500,
+        "-lighter": 400,
+        "-lightest": 300,
+    }
+    dark = {
+        "": 300,
+        "-dark": 400,
+        "-darker": 500,
+        "-darkest": 600,
+        "-light": 200,
+        "-lighter": 100,
+        "-lightest": 50,
+    }
 
     def block(selector, steps, extra):
         body = [f"  --ifm-color-primary{k}: {TEAL[v]};" for k, v in steps.items()]
         return "\n".join([f"{selector} {{", *body, *extra, "}"])
 
-    return "\n".join([
-        _CSS_HEAD + _FONT_IMPORT,
-        block(":root", light, [
-            f"  --ifm-font-color-base: {role('ink')};",
-            f"  --ifm-background-color: {CONCRETE[0]};",
-            "  --ifm-heading-font-family: Barlow, system-ui, sans-serif;",
-            "  --ifm-heading-font-weight: 600;",
-            "  --ifm-font-family-monospace: ui-monospace, 'Cascadia Code', SFMono-Regular, Consolas, monospace;",
-            f"  --ifm-footer-background-color: {TEAL[950]};",
-        ]),
-        "",
-        block("[data-theme='dark']", dark, [
-            f"  --ifm-font-color-base: {CONCRETE[100]};",
-            f"  --ifm-background-color: {CONCRETE[950]};",
-            f"  --ifm-navbar-background-color: {CONCRETE[950]};",
-            f"  --ifm-footer-background-color: {TEAL[950]};",
-        ]),
-        "",
-        ".navbar__title { font-family: var(--ifm-heading-font-family); font-weight: 600; }",
-        "",
-    ])
+    return "\n".join(
+        [
+            _CSS_HEAD + _FONT_IMPORT,
+            block(
+                ":root",
+                light,
+                [
+                    f"  --ifm-font-color-base: {role('ink')};",
+                    f"  --ifm-background-color: {CONCRETE[0]};",
+                    "  --ifm-heading-font-family: Barlow, system-ui, sans-serif;",
+                    "  --ifm-heading-font-weight: 600;",
+                    "  --ifm-font-family-monospace: ui-monospace, 'Cascadia Code', SFMono-Regular, Consolas, monospace;",
+                    f"  --ifm-footer-background-color: {TEAL[950]};",
+                ],
+            ),
+            "",
+            block(
+                "[data-theme='dark']",
+                dark,
+                [
+                    f"  --ifm-font-color-base: {CONCRETE[100]};",
+                    f"  --ifm-background-color: {CONCRETE[950]};",
+                    f"  --ifm-navbar-background-color: {CONCRETE[950]};",
+                    f"  --ifm-footer-background-color: {TEAL[950]};",
+                ],
+            ),
+            "",
+            ".navbar__title { font-family: var(--ifm-heading-font-family); font-weight: 600; }",
+            "",
+        ]
+    )
 
 
 def css_sphinx_rtd() -> str:
     """Overrides for sphinx_rtd_theme (html_static_path + html_css_files)."""
-    return "\n".join([
-        _CSS_HEAD + _FONT_IMPORT,
-        f".wy-side-nav-search, .wy-nav-top {{ background: {TEAL[600]}; }}",
-        f".wy-side-nav-search input[type=text] {{ border-color: {TEAL[700]}; }}",
-        f".wy-menu-vertical p.caption {{ color: {TEAL[200]}; }}",
-        f".wy-nav-side {{ background: {TEAL[950]}; }}",
-        f"a, a:visited {{ color: {TEAL[600]}; }}",
-        f"a:hover {{ color: {TEAL[700]}; }}",
-        ".rst-content h1, .rst-content h2, .rst-content h3, .rst-content h4,",
-        ".wy-side-nav-search > a { font-family: Barlow, system-ui, sans-serif; font-weight: 600; }",
-        "/* The theme lets html_logo fill the sidebar's width; the mark reads at 64 px. */",
-        ".wy-side-nav-search > a img.logo,",
-        ".wy-side-nav-search .wy-dropdown > a img.logo { width: 64px; }",
-        "",
-    ])
+    return "\n".join(
+        [
+            _CSS_HEAD + _FONT_IMPORT,
+            f".wy-side-nav-search, .wy-nav-top {{ background: {TEAL[600]}; }}",
+            f".wy-side-nav-search input[type=text] {{ border-color: {TEAL[700]}; }}",
+            f".wy-menu-vertical p.caption {{ color: {TEAL[200]}; }}",
+            f".wy-nav-side {{ background: {TEAL[950]}; }}",
+            f"a, a:visited {{ color: {TEAL[600]}; }}",
+            f"a:hover {{ color: {TEAL[700]}; }}",
+            ".rst-content h1, .rst-content h2, .rst-content h3, .rst-content h4,",
+            ".wy-side-nav-search > a { font-family: Barlow, system-ui, sans-serif; font-weight: 600; }",
+            "/* The theme lets html_logo fill the sidebar's width; the mark reads at 64 px. */",
+            ".wy-side-nav-search > a img.logo,",
+            ".wy-side-nav-search .wy-dropdown > a img.logo { width: 64px; }",
+            "",
+        ]
+    )
 
 
 def palette_markdown(rows) -> str:
@@ -689,18 +823,26 @@ def palette_markdown(rows) -> str:
     for name in ROLES:
         scale, step = ROLES[name]
         lines.append(f"| `{name}` | `{role(name)}` ({scale} {step}) | {_ROLE_NOTES[name]} |")
-    lines += ["", "Every pairing the brand relies on is checked on each run; one that falls",
-              "below its minimum stops the run.", "",
-              "| Foreground | Background | Ratio | Minimum | Depends on it |",
-              "| --- | --- | --- | --- | --- |"]
+    lines += [
+        "",
+        "Every pairing the brand relies on is checked on each run; one that falls",
+        "below its minimum stops the run.",
+        "",
+        "| Foreground | Background | Ratio | Minimum | Depends on it |",
+        "| --- | --- | --- | --- | --- |",
+    ]
     for fg, bg, ratio, minimum, use in rows:
         lines.append(f"| `{fg}` | `{bg}` | {ratio:.2f}:1 | {minimum:g}:1 | {use} |")
-    lines += ["", "| Step | " + " | ".join(str(s) for s in TEAL) + " |",
-              "| --- |" + " --- |" * len(TEAL),
-              "| teal | " + " | ".join(f"`{v}`" for v in TEAL.values()) + " |", "",
-              "| Step | " + " | ".join(str(s) for s in CONCRETE) + " |",
-              "| --- |" + " --- |" * len(CONCRETE),
-              "| concrete | " + " | ".join(f"`{v}`" for v in CONCRETE.values()) + " |"]
+    lines += [
+        "",
+        "| Step | " + " | ".join(str(s) for s in TEAL) + " |",
+        "| --- |" + " --- |" * len(TEAL),
+        "| teal | " + " | ".join(f"`{v}`" for v in TEAL.values()) + " |",
+        "",
+        "| Step | " + " | ".join(str(s) for s in CONCRETE) + " |",
+        "| --- |" + " --- |" * len(CONCRETE),
+        "| concrete | " + " | ".join(f"`{v}`" for v in CONCRETE.values()) + " |",
+    ]
     return "\n".join(lines)
 
 
@@ -708,12 +850,16 @@ def readme_text(rows) -> str:
     path = os.path.join(HERE, "README.md")
     with open(path, encoding="utf-8") as f:
         text = f.read()
-    return re.sub(r"(<!-- palette:start -->\n).*?(\n<!-- palette:end -->)",
-                  lambda m: m.group(1) + palette_markdown(rows) + m.group(2),
-                  text, flags=re.S)
+    return re.sub(
+        r"(<!-- palette:start -->\n).*?(\n<!-- palette:end -->)",
+        lambda m: m.group(1) + palette_markdown(rows) + m.group(2),
+        text,
+        flags=re.S,
+    )
 
 
 # --- Write / check ------------------------------------------------------------
+
 
 def _png_bytes(img: Image.Image) -> bytes:
     buf = io.BytesIO()
@@ -737,14 +883,17 @@ def _same_ico(path: str, frames) -> bool:
                 if frame.tobytes() != img.tobytes():
                     return False
             return True
-    except (OSError, KeyError):
+    except OSError, KeyError:
         return False
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true",
-                        help="fail if any generated file differs from what would be written")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="fail if any generated file differs from what would be written",
+    )
     args = parser.parse_args()
 
     rows = check_contrast()
@@ -771,8 +920,9 @@ def main() -> int:
                 f.write(value)
         elif isinstance(value, list):
             largest = value[-1][1]
-            largest.save(path, sizes=[(s, s) for s, _ in value],
-                         append_images=[img for _, img in value[:-1]])
+            largest.save(
+                path, sizes=[(s, s) for s, _ in value], append_images=[img for _, img in value[:-1]]
+            )
         else:
             with open(path, "wb") as f:
                 f.write(_png_bytes(value))
