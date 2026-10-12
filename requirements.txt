@@ -1,3 +1,0 @@
-# Pinned so that every machine, and CI, rasterises the same pixels.
-pillow==12.3.0
-fonttools==4.66.0
