@@ -18,7 +18,7 @@ Usage:
   python generate.py            write every asset, tokens.json, web/, README table
   python generate.py --check    render in memory and fail if any file is stale
 
-Needs Pillow and fontTools (see requirements.txt).
+Needs Pillow and fontTools (see pyproject.toml).
 """
 from __future__ import annotations
 

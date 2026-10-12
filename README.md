@@ -212,22 +212,21 @@ site builds and renders without depending on this one.
 ## Regenerate
 
 ```sh
-python -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-python generate.py            # write everything
-python generate.py --check    # what CI runs: fail if any file is stale
+uv sync
+uv run python generate.py            # write everything
+uv run python generate.py --check    # what CI runs: fail if any file is stale
 ```
 
-The script needs Pillow and fontTools, pinned in `requirements.txt`, and nothing
+The script needs Pillow and fontTools, pinned in `pyproject.toml`, and nothing
 from the machine: the fonts come from `fonts/`. Output is deterministic.
 `--check` compares decoded pixels rather than file bytes, so a PNG compressed
 differently on another platform still counts as current.
 
 ## Checks
 
-`uvx prek run --all-files` runs `.pre-commit-config.yaml`: `generate.py
+`uv run prek run --all-files` runs `.pre-commit-config.yaml`: `generate.py
 --check`, markdownlint, zizmor and the merge-conflict, large-file, YAML and
-JSON checks. `uvx prek install` runs them on every commit.
+JSON checks. `uv run prek install` runs them on every commit.
 
 | Workflow | What it runs |
 | --- | --- |
