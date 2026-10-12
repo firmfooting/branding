@@ -32,7 +32,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast, override
+from typing import override
 
 from fontTools.pens.basePen import AbstractPen, BasePen
 from fontTools.pens.recordingPen import DecomposingRecordingPen
@@ -348,8 +348,11 @@ def _moved(shapes: Sequence[Shape], s: float, dx: float, dy: float) -> list[Shap
 class Font:
     def __init__(self, filename: str) -> None:
         self.tt = TTFont(HERE / "fonts" / filename)
-        # fontTools types its tables loosely; unitsPerEm is a required head field.
-        self.upm: int = cast("Any", self.tt["head"]).unitsPerEm
+        # fontTools sets head fields at decompile time, so its stubs do not declare them.
+        upm = vars(self.tt["head"]).get("unitsPerEm")
+        if not isinstance(upm, int):
+            raise TypeError(f"{filename} has no unitsPerEm in its head table")
+        self.upm: int = upm
         self.glyphs = self.tt.getGlyphSet()
         cmap = self.tt.getBestCmap()
         if cmap is None:
