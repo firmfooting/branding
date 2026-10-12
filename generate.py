@@ -27,19 +27,20 @@ import argparse
 import io
 import json
 import math
-import os
 import re
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
-from fontTools.pens.basePen import BasePen
+from fontTools.pens.basePen import AbstractPen, BasePen
 from fontTools.pens.recordingPen import DecomposingRecordingPen
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
 from PIL import Image, ImageChops, ImageDraw
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = Path(__file__).resolve().parent
+Point = tuple[float, float]
 SS = 4  # supersample factor; masks are drawn at SS x size and box-filtered down
 
 
@@ -114,7 +115,9 @@ def _luminance(h: str) -> float:
 
 def _mix(a: str, b: str, t: float) -> str:
     """sRGB blend of two colours, t of the way from a to b."""
-    return "#" + "".join(f"{round(x + (y - x) * t):02X}" for x, y in zip(_hex_rgb(a), _hex_rgb(b)))
+    return "#" + "".join(
+        f"{round(x + (y - x) * t):02X}" for x, y in zip(_hex_rgb(a), _hex_rgb(b), strict=True)
+    )
 
 
 def contrast(a: str, b: str) -> float:
@@ -125,6 +128,8 @@ def contrast(a: str, b: str) -> float:
 def _colour(ref: str) -> str:
     return GROUNDS[ref] if ref in GROUNDS else role(ref)
 
+
+Row = tuple[str, str, float, float, str]
 
 # (foreground, background, minimum, what depends on it). 4.5 is WCAG AA for body
 # text, 7 is AAA, 3 is the floor for large text and for graphics (WCAG 1.4.11).
@@ -142,7 +147,7 @@ CONTRAST_RULES = [
 ]
 
 
-def check_contrast() -> list[tuple[str, str, float, float, str]]:
+def check_contrast() -> list[Row]:
     rows, failures = [], []
     for fg, bg, minimum, use in CONTRAST_RULES:
         ratio = contrast(_colour(fg), _colour(bg))
@@ -176,7 +181,7 @@ class Poly:
     def contours(self) -> list[list[tuple[float, float]]]:
         return [list(self.points)]
 
-    def moved(self, s: float, dx: float, dy: float) -> "Poly":
+    def moved(self, s: float, dx: float, dy: float) -> Poly:
         return Poly(tuple((x * s + dx, y * s + dy) for x, y in self.points))
 
 
@@ -211,7 +216,7 @@ class RRect:
                 pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
         return [pts]
 
-    def moved(self, s: float, dx: float, dy: float) -> "RRect":
+    def moved(self, s: float, dx: float, dy: float) -> RRect:
         return RRect(self.x * s + dx, self.y * s + dy, self.w * s, self.h * s, self.r * s)
 
 
@@ -236,7 +241,7 @@ class Circle:
             ]
         ]
 
-    def moved(self, s: float, dx: float, dy: float) -> "Circle":
+    def moved(self, s: float, dx: float, dy: float) -> Circle:
         return Circle(self.cx * s + dx, self.cy * s + dy, self.r * s)
 
 
@@ -245,17 +250,17 @@ class _FlattenPen(BasePen):
 
     STEPS = 12
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(None)
         self.contours: list[list[tuple[float, float]]] = []
 
-    def _moveTo(self, pt):
+    def _moveTo(self, pt: Point) -> None:  # noqa: N802 -- overrides fontTools BasePen
         self.contours.append([pt])
 
-    def _lineTo(self, pt):
+    def _lineTo(self, pt: Point) -> None:  # noqa: N802 -- overrides fontTools BasePen
         self.contours[-1].append(pt)
 
-    def _curveToOne(self, p1, p2, p3):
+    def _curveToOne(self, p1: Point, p2: Point, p3: Point) -> None:  # noqa: N802 -- overrides fontTools BasePen
         p0 = self._getCurrentPoint()
         for i in range(1, self.STEPS + 1):
             t = i / self.STEPS
@@ -263,17 +268,20 @@ class _FlattenPen(BasePen):
             self.contours[-1].append(
                 tuple(
                     u**3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t**3 * d
-                    for a, b, c, d in zip(p0, p1, p2, p3)
+                    for a, b, c, d in zip(p0, p1, p2, p3, strict=True)
                 )
             )
 
-    def _qCurveToOne(self, p1, p2):
+    def _qCurveToOne(self, p1: Point, p2: Point) -> None:  # noqa: N802 -- overrides fontTools BasePen
         p0 = self._getCurrentPoint()
         for i in range(1, self.STEPS + 1):
             t = i / self.STEPS
             u = 1 - t
             self.contours[-1].append(
-                tuple(u * u * a + 2 * u * t * b + t * t * c for a, b, c in zip(p0, p1, p2))
+                tuple(
+                    u * u * a + 2 * u * t * b + t * t * c
+                    for a, b, c in zip(p0, p1, p2, strict=True)
+                )
             )
 
 
@@ -285,7 +293,7 @@ class Outline:
     ops: tuple
     m: tuple[float, float, float, float, float, float]
 
-    def _replay(self, pen):
+    def _replay(self, pen: AbstractPen) -> None:
         tp = TransformPen(pen, self.m)
         for op, args in self.ops:
             getattr(tp, op)(*args)
@@ -300,9 +308,12 @@ class Outline:
         self._replay(pen)
         return pen.contours
 
-    def moved(self, s: float, dx: float, dy: float) -> "Outline":
+    def moved(self, s: float, dx: float, dy: float) -> Outline:
         a, b, c, d, e, f = self.m
         return Outline(self.ops, (a * s, b * s, c * s, d * s, e * s + dx, f * s + dy))
+
+
+type Shape = Poly | RRect | Circle | Outline
 
 
 @dataclass
@@ -320,7 +331,7 @@ class Scene:
     title: str = ""
 
 
-def _moved(shapes, s, dx, dy):
+def _moved(shapes: list[Shape], s: float, dx: float, dy: float) -> list[Shape]:
     return [sh.moved(s, dx, dy) for sh in shapes]
 
 
@@ -328,8 +339,8 @@ def _moved(shapes, s, dx, dy):
 
 
 class Font:
-    def __init__(self, filename: str):
-        self.tt = TTFont(os.path.join(HERE, "fonts", filename))
+    def __init__(self, filename: str) -> None:
+        self.tt = TTFont(HERE / "fonts" / filename)
         self.upm = self.tt["head"].unitsPerEm
         self.glyphs = self.tt.getGlyphSet()
         self.cmap = self.tt.getBestCmap()
@@ -385,7 +396,7 @@ def mark_shapes(*, beacon: bool = False, cover: bool = False) -> list:
     return shapes
 
 
-def tile_scene(*, radius: float = TILE_RADIUS, **variant) -> Scene:
+def tile_scene(*, radius: float = TILE_RADIUS, **variant: bool) -> Scene:
     return Scene(
         GRID,
         GRID,
@@ -421,7 +432,7 @@ def lockup_scene(text_colour: str) -> Scene:
     )
     tile = tile_scene()
     return Scene(
-        GRID + LOCKUP_GAP + advance, GRID, tile.layers + [Layer(text_colour, text)], "firmfooting"
+        GRID + LOCKUP_GAP + advance, GRID, [*tile.layers, Layer(text_colour, text)], "firmfooting"
     )
 
 
@@ -443,7 +454,7 @@ def product_lockup_scene(name: str, text_colour: str, accent: str) -> Scene:
     return Scene(
         width,
         GRID,
-        tile_scene().layers + [Layer(accent, endorse), Layer(text_colour, text)],
+        [*tile_scene().layers, Layer(accent, endorse), Layer(text_colour, text)],
         f"{name}, by firmfooting",
     )
 
@@ -468,7 +479,7 @@ REPOS = {
 }
 
 
-def _hatch(x0, y0, x1, y1, pitch, weight) -> list:
+def _hatch(x0: float, y0: float, x1: float, y1: float, pitch: float, weight: float) -> list[Shape]:
     """45-degree earth hatching, the section-drawing convention for ground."""
     h = y1 - y0
     lines, x = [], x0 - h
@@ -480,27 +491,27 @@ def _hatch(x0, y0, x1, y1, pitch, weight) -> list:
 
 def social_scene(slug: str) -> Scene:
     name, tagline = REPOS[slug]
-    W, H = 1280, 640
+    canvas_w, canvas_h = 1280, 640
     left = 88
-    layers = [Layer(role("night"), [RRect(0, 0, W, H)])]
+    layers = [Layer(role("night"), [RRect(0, 0, canvas_w, canvas_h)])]
 
     # Drafting grid, faint.
-    grid = [RRect(x, 0, 1, H) for x in range(32, W, 32)]
-    grid += [RRect(0, y, W, 1) for y in range(32, H, 32)]
+    grid = [RRect(x, 0, 1, canvas_h) for x in range(32, canvas_w, 32)]
+    grid += [RRect(0, y, canvas_w, 1) for y in range(32, canvas_h, 32)]
     layers.append(Layer(_mix(TEAL[950], TEAL[900], 0.5), grid))
 
     # Ground: the mark's own geometry at 26 px per unit, run the full width.
     u = 26
     ground_top = 528
-    ground = RRect(0, ground_top, W, u)
+    ground = RRect(0, ground_top, canvas_w, u)
     layers.append(
         Layer(
             TEAL[800],
-            _hatch(0, ground_top + u, W, H, 22, 4),
-            clip=[RRect(0, ground_top + u, W, H - ground_top - u)],
+            _hatch(0, ground_top + u, canvas_w, canvas_h, 22, 4),
+            clip=[RRect(0, ground_top + u, canvas_w, canvas_h - ground_top - u)],
         )
     )
-    footing_x = W - left - 10 * u - 3 * u
+    footing_x = canvas_w - left - 10 * u - 3 * u
     footing = FOOTING.moved(u, footing_x - 3 * u, ground_top - 10 * u)
     layers.append(Layer(role("universal"), [ground]))
     layers.append(Layer(role("chalk"), [footing]))
@@ -509,8 +520,9 @@ def social_scene(slug: str) -> Scene:
     if slug != ".github":
         s = 48 / GRID
         lock = lockup_scene(role("chalk"))
-        for layer in lock.layers:
-            layers.append(Layer(layer.colour, _moved(layer.shapes, s, left, 72)))
+        layers.extend(
+            Layer(layer.colour, _moved(layer.shapes, s, left, 72)) for layer in lock.layers
+        )
 
     # Name, tagline, address.
     size = 116 if len(name) <= 12 else 96
@@ -524,7 +536,7 @@ def social_scene(slug: str) -> Scene:
     url = "github.com/firmfooting" + ("" if slug == ".github" else f"/{slug}")
     glyphs, _ = MEDIUM.set(url, 26, left, 494, 0.01)
     layers.append(Layer(TEAL[400], glyphs))
-    return Scene(W, H, layers, name)
+    return Scene(canvas_w, canvas_h, layers, name)
 
 
 # --- Rendering ----------------------------------------------------------------
@@ -534,8 +546,10 @@ def render_svg(scene: Scene, width: float | None = None) -> str:
     w = width or scene.w
     h = w * scene.h / scene.w
     out = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {_n(scene.w)} {_n(scene.h)}" '
-        f'width="{_n(w)}" height="{_n(h)}" role="img" aria-label="{scene.title}">',
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {_n(scene.w)} {_n(scene.h)}" '
+            f'width="{_n(w)}" height="{_n(h)}" role="img" aria-label="{scene.title}">'
+        ),
         f"<title>{scene.title}</title>",
     ]
     for layer in scene.layers:
@@ -547,7 +561,7 @@ def render_svg(scene: Scene, width: float | None = None) -> str:
     return "\n".join(out) + "\n"
 
 
-def _mask(shapes, size: tuple[int, int], k: float) -> Image.Image:
+def _mask(shapes: list[Shape], size: tuple[int, int], k: float) -> Image.Image:
     mask = Image.new("1", size, 0)
     draw = ImageDraw.Draw(mask)
     for shape in shapes:
@@ -582,7 +596,7 @@ def render_png(scene: Scene, width: int, height: int | None = None) -> Image.Ima
         if layer.clip:
             mask = ImageChops.logical_and(mask, _mask(layer.clip, big, k))
         alpha = mask.convert("L").resize((width, height), Image.BOX)
-        paint = Image.new("RGBA", (width, height), _hex_rgb(layer.colour) + (255,))
+        paint = Image.new("RGBA", (width, height), (*_hex_rgb(layer.colour), 255))
         paint.putalpha(alpha)
         img.alpha_composite(paint)
     return img
@@ -659,7 +673,7 @@ def build() -> dict[str, object]:
 def tokens_json() -> str:
     """Design tokens in the W3C Design Tokens Community Group format."""
 
-    def colour(v):
+    def colour(v: str) -> dict[str, str]:
         return {"$type": "color", "$value": v}
 
     tokens = {
@@ -668,8 +682,11 @@ def tokens_json() -> str:
             for name, scale in SCALES.items()
         },
         "role": {
-            name: {**colour("{color.%s.%d}" % ROLES[name]), "$description": _ROLE_NOTES[name]}
-            for name in ROLES
+            name: {
+                **colour("{{color.{}.{}}}".format(*ref)),
+                "$description": _ROLE_NOTES[name],
+            }
+            for name, ref in ROLES.items()
         },
         "font": {
             "display": {
@@ -716,6 +733,7 @@ _ROLE_NOTES = {
     "rule": "Hairlines and borders on light grounds.",
 }
 
+_MONO = "ui-monospace, 'Cascadia Code', SFMono-Regular, Consolas, monospace"
 _CSS_HEAD = (
     "/* Generated by firmfooting/branding generate.py. Do not edit; change the palette there. */\n"
 )
@@ -732,7 +750,7 @@ def css_tokens() -> str:
     lines += [
         "  --ff-font-display: Barlow, system-ui, sans-serif;",
         "  --ff-font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;",
-        "  --ff-font-mono: ui-monospace, 'Cascadia Code', SFMono-Regular, Consolas, monospace;",
+        f"  --ff-font-mono: {_MONO};",
         "}",
         "",
     ]
@@ -760,7 +778,7 @@ def css_docusaurus() -> str:
         "-lightest": 50,
     }
 
-    def block(selector, steps, extra):
+    def block(selector: str, steps: dict[str, int], extra: list[str]) -> str:
         body = [f"  --ifm-color-primary{k}: {TEAL[v]};" for k, v in steps.items()]
         return "\n".join([f"{selector} {{", *body, *extra, "}"])
 
@@ -775,7 +793,7 @@ def css_docusaurus() -> str:
                     f"  --ifm-background-color: {CONCRETE[0]};",
                     "  --ifm-heading-font-family: Barlow, system-ui, sans-serif;",
                     "  --ifm-heading-font-weight: 600;",
-                    "  --ifm-font-family-monospace: ui-monospace, 'Cascadia Code', SFMono-Regular, Consolas, monospace;",
+                    f"  --ifm-font-family-monospace: {_MONO};",
                     f"  --ifm-footer-background-color: {TEAL[950]};",
                 ],
             ),
@@ -809,7 +827,10 @@ def css_sphinx_rtd() -> str:
             f"a, a:visited {{ color: {TEAL[600]}; }}",
             f"a:hover {{ color: {TEAL[700]}; }}",
             ".rst-content h1, .rst-content h2, .rst-content h3, .rst-content h4,",
-            ".wy-side-nav-search > a { font-family: Barlow, system-ui, sans-serif; font-weight: 600; }",
+            (
+                ".wy-side-nav-search > a {"
+                " font-family: Barlow, system-ui, sans-serif; font-weight: 600; }"
+            ),
             "/* The theme lets html_logo fill the sidebar's width; the mark reads at 64 px. */",
             ".wy-side-nav-search > a img.logo,",
             ".wy-side-nav-search .wy-dropdown > a img.logo { width: 64px; }",
@@ -818,10 +839,9 @@ def css_sphinx_rtd() -> str:
     )
 
 
-def palette_markdown(rows) -> str:
+def palette_markdown(rows: list[Row]) -> str:
     lines = ["| Role | Value | Use |", "| --- | --- | --- |"]
-    for name in ROLES:
-        scale, step = ROLES[name]
+    for name, (scale, step) in ROLES.items():
         lines.append(f"| `{name}` | `{role(name)}` ({scale} {step}) | {_ROLE_NOTES[name]} |")
     lines += [
         "",
@@ -846,15 +866,13 @@ def palette_markdown(rows) -> str:
     return "\n".join(lines)
 
 
-def readme_text(rows) -> str:
-    path = os.path.join(HERE, "README.md")
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
+def readme_text(rows: list[Row]) -> str:
+    text = (HERE / "README.md").read_text(encoding="utf-8")
     return re.sub(
         r"(<!-- palette:start -->\n).*?(\n<!-- palette:end -->)",
         lambda m: m.group(1) + palette_markdown(rows) + m.group(2),
         text,
-        flags=re.S,
+        flags=re.DOTALL,
     )
 
 
@@ -867,7 +885,7 @@ def _png_bytes(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
-def _same_pixels(path: str, img: Image.Image) -> bool:
+def _same_pixels(path: Path, img: Image.Image) -> bool:
     try:
         with Image.open(path) as old:
             return old.mode == img.mode and old.size == img.size and old.tobytes() == img.tobytes()
@@ -875,7 +893,7 @@ def _same_pixels(path: str, img: Image.Image) -> bool:
         return False
 
 
-def _same_ico(path: str, frames) -> bool:
+def _same_ico(path: Path, frames: list[tuple[int, Image.Image]]) -> bool:
     try:
         with Image.open(path) as ico:
             for size, img in frames:
@@ -902,9 +920,9 @@ def main() -> int:
 
     stale = []
     for rel, value in outputs.items():
-        path = os.path.join(HERE, rel)
+        path = HERE / rel
         if isinstance(value, str):
-            same = os.path.exists(path) and open(path, encoding="utf-8").read() == value
+            same = path.exists() and path.read_text(encoding="utf-8") == value
         elif isinstance(value, list):
             same = _same_ico(path, value)
         else:
@@ -914,18 +932,16 @@ def main() -> int:
         stale.append(rel)
         if args.check:
             continue
-        os.makedirs(os.path.dirname(path) or HERE, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         if isinstance(value, str):
-            with open(path, "w", encoding="utf-8", newline="\n") as f:
-                f.write(value)
+            path.write_text(value, encoding="utf-8", newline="\n")
         elif isinstance(value, list):
             largest = value[-1][1]
             largest.save(
                 path, sizes=[(s, s) for s, _ in value], append_images=[img for _, img in value[:-1]]
             )
         else:
-            with open(path, "wb") as f:
-                f.write(_png_bytes(value))
+            path.write_bytes(_png_bytes(value))
 
     if args.check:
         if stale:
