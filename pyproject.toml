@@ -31,7 +31,8 @@ select = [
   "PLW", "PT", "PTH", "PYI", "RET", "RUF", "S", "SIM",
   "SLF", "T20", "TID251", "TID252", "TRY", "UP", "W",
 ]
-# The org-wide ignores; this repository adds none of its own.
+# The org-wide ignores; this repository adds none of its own. ANN401 is covered by
+# pyrefly's explicit-any.
 ignore = [
   "ANN401", "ISC001", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917",
   "PLR2004", "PT018", "TRY003", "TRY004",
@@ -66,3 +67,6 @@ unnecessary-type-conversion = "error"
 redundant-condition = "error"
 unknown-argument-type = "error"
 unknown-variable-type = "error"
+explicit-any = "error"
+implicit-any-empty-container = "error"
+implicit-any-lambda = "error"
